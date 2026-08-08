@@ -365,7 +365,7 @@ function newState(name,pos,role){
     cntSave:0,cntSnack:0,cntBoldWin:0,cntBoldFail:0,samePick:0,samePickKey:null,teamYears:0,
     six:0,bigInj:0,ironStreak:0,npbYears:0,
     injNext:0,tmpInj:0,rehab:0,salary:0,pool:0,seasonFactor:1,
-    stats:{CPBL:null,NPB:null,MLB:null,MINOR:null},honors:[],intlCount:0,intlLock:null,dpos:null,dposYears:{},tradeRefuse:0,champThisTeam:false,svc:0,faElig:false,tradeHeat:0,complainCount:0,demotionRefused:false,tj:0,tjCount:0,effort:'普通',tjSuccess:0,love:{st:'single',partner:null,kids:0,caught:0,affairs:0,exes:[],dyrs:0,datedTimes:0},traits2:{},log:[],ct:null,done:false};
+    stats:{CPBL:null,NPB:null,MLB:null,MINOR:null},honors:[],intlCount:0,intlLock:null,dpos:null,dposYears:{},roleYears:{},tradeRefuse:0,champThisTeam:false,svc:0,faElig:false,tradeHeat:0,complainCount:0,demotionRefused:false,tj:0,tjCount:0,effort:'普通',tjSuccess:0,love:{st:'single',partner:null,kids:0,caught:0,affairs:0,exes:[],dyrs:0,datedTimes:0},traits2:{},log:[],ct:null,done:false};
 }
 function blankStat(){return {yr:0,G:0,PA:0,AB:0,H:0,HR:0,RBI:0,SB:0,BB:0,W:0,L:0,SV:0,IP:0,SO:0,ER:0,AS:0,DEF:0};}
 function bucketOf(lv){ const l=lv&&LV[lv]; return l&&l.top?l.top:'MINOR'; } /* 業餘引退時 lv 為空,歸類 MINOR */
@@ -445,6 +445,13 @@ function pitcherRole(){ /* 體力 >=50 先發;否則牛棚,牛棚內看表現升
   if(S.role==='CL')return d>=1?'CL':'MR';   /* 終結者崩盤才降中繼 */
   return d>=3?'CL':'MR';                     /* 中繼打出頂尖成績升終結者 */
 }
+function fmtIP(ip){ /* 十進位局數轉棒球表示:小數部分 →三分之幾(出局數) */
+  if(ip==null)return '0.0';
+  const whole=Math.floor(ip); const frac=ip-whole;
+  const outs=Math.round(frac*3); /* 0/1/2/3 */
+  if(outs>=3)return (whole+1)+'.0';
+  return whole+'.'+outs;
+}
 function roleN(r){ return {SP:'先發',MR:'中繼',CL:'終結者'}[r]||'—'; }
 function isSP(){ return S.role==='SP'; } /* 先發引擎判定 */
 function ovr(){
@@ -514,23 +521,39 @@ function simSeason(lv){
   if(f<=0) return st;
   if(S.pos==='P'){
     const q=(a.vel+a.ctl+a.brk)/3, d=q-par; st.d=d;
+    /* 表現係數:投得好給滿局數,投爛減少出賽(比照野手) */
+    const perfF=clamp(0.80+d*0.028,0.42,1.12);
     if(isSP()){
-      const gs=Math.round(clamp(20+(a.sta-40)*0.18,10,30)*f*(0.92+R()*0.12));
-      st.G=gs; st.IP=+(gs*clamp(4.6+(a.sta-40)*0.05,3.8,7.0)).toFixed(1);
+      const gs=Math.round(clamp(20+(a.sta-40)*0.18,10,30)*f*perfF*(0.94+R()*0.08));
+      st.G=Math.max(1,gs);
+      /* 控球差→用球數兇→單場局數略減 */
+      const ctlIP=clamp((a.ctl-par)*0.012,-0.5,0.4);
+      st.IP=+(st.G*clamp(4.6+(a.sta-40)*0.05+ctlIP,3.6,7.0)).toFixed(1);
     }else{
-      st.G=Math.round(clamp(45+(a.sta-40)*0.3,25,68)*f*(0.92+R()*0.12));
+      st.G=Math.max(1,Math.round(clamp(45+(a.sta-40)*0.3,25,68)*f*perfF*(0.94+R()*0.08)));
       st.IP=+(st.G*1.05).toFixed(1);
     }
     st.era=clamp(4.32-d*0.17+N0(0.35),1.40,9.90);
     st.ER=Math.round(st.era*st.IP/9);
     const k9=clamp(6.2+(a.vel-par)*0.11+(a.brk-par)*0.06+N0(0.5),3.5,13.5);
     st.SO=Math.round(st.IP/9*k9);
+    /* 保送:控球決定(BB/9);被安打:d 值決定;WHIP=(H+BB)/IP */
+    const bb9=clamp(4.6-(a.ctl-par)*0.13+N0(0.4),1.2,7.5);
+    st.BB=Math.round(st.IP/9*bb9);
+    const h9=clamp(9.2-d*0.16+N0(0.5),5.0,13.5);
+    st.H=Math.round(st.IP/9*h9);
+    st.WHIP=st.IP>0?+((st.H+st.BB)/st.IP).toFixed(2):0;
     if(isSP()){
       const dec=Math.round(st.G*0.72), wp=clamp(0.50+d*0.014+N0(0.05),0.15,0.85);
       st.W=Math.round(dec*wp); st.L=dec-st.W;
-    }else{
+    }else if(S.role==='CL'){
       st.W=ri(1,4); st.L=ri(0,4);
-      st.SV=d>=3?Math.round(clamp(20+d*2,0,48)*f):(chance(25)?ri(1,6):0);
+      st.SV=d>=3?Math.round(clamp(20+d*2,0,48)*f*perfF):(chance(25)?ri(1,6):0);
+      st.HLD=Math.round(clamp(8+d,0,25)*f*perfF*0.4);
+    }else{ /* 中繼:累積中繼成功 HLD */
+      st.W=ri(1,6); st.L=ri(0,4);
+      st.HLD=Math.round(clamp(12+d*2,0,40)*f*perfF);
+      st.SV=chance(20)?ri(1,5):0;
     }
   }else{
     const q=a.con*0.6+a.eye*0.2+a.spd*0.2, d=q-par; st.d=d;
@@ -573,18 +596,19 @@ function accStat(bucket,st){
   if(bucket!=='MINOR'&&S.orgTeam){ const tb=S.teamTally[bucket]||(S.teamTally[bucket]={});
     tb[S.orgTeam]=(tb[S.orgTeam]||0)+1; }
   if(S.pos!=='P'){ const dp=S.dpos||'—'; S.dposYears[dp]=(S.dposYears[dp]||0)+1; }
+  else if(S.role){ S.roleYears[S.role]=(S.roleYears[S.role]||0)+1; }
   ['G','PA','AB','H','HR','RBI','SB','BB','W','L','SV','SO','ER'].forEach(k=>t[k]+=st[k]);
   t.DEF+=(st.DEF||0);
   t.IP=+(t.IP+st.IP).toFixed(1);
 }
 function statLine(st){
-  if(S.pos==='P') return `出賽 ${st.G}｜局數 ${st.IP}｜${st.W}勝${st.L}敗${st.SV?st.SV+'救援':''}｜三振 ${st.SO}｜ERA ${st.era.toFixed(2)}`;
+  if(S.pos==='P'){ const role=roleN(S.role); const relief=(S.role==='CL'&&st.SV)?`｜${st.SV}救援`:(S.role==='MR'&&st.HLD)?`｜${st.HLD}中繼`:''; return `出賽 ${st.G}｜局數 ${fmtIP(st.IP)}｜${st.W}勝${st.L}敗${relief}｜三振 ${st.SO}｜保送 ${st.BB||0}｜ERA ${st.era.toFixed(2)}｜WHIP ${(st.WHIP||0).toFixed(2)}`; }
   const obpN=st.PA>0?(st.H+st.BB)/st.PA:0;
   const slgN=slgOf(st);
   const obp=st.PA>0?obpN.toFixed(3).replace(/^0/,''):'-';
   const slg=st.AB>0?slgN.toFixed(3).replace(/^0/,''):'-';
   const ops=st.AB>0?(obpN+slgN).toFixed(3).replace(/^0/,''):'-';
-  return `出賽 ${st.G}｜打擊率 ${st.avg.toFixed(3).replace(/^0/,'')}｜長打率 ${slg}｜OPS ${ops}｜全壘打 ${st.HR}｜打點 ${st.RBI}｜盜壘 ${st.SB}${st.DEF!==undefined?`｜守備 ${st.DEF>0?'+':''}${st.DEF}`:''}`;
+  return `出賽 ${st.G}｜打擊率 ${st.avg.toFixed(3).replace(/^0/,'')}｜上壘率 ${obp}｜長打率 ${slg}｜OPS ${ops}｜全壘打 ${st.HR}｜打點 ${st.RBI}｜盜壘 ${st.SB}${st.DEF!==undefined?`｜守備 ${st.DEF>0?'+':''}${st.DEF}`:''}`;
 }
 /* 長打率估算:無二三壘數據,依全壘打比例與力量推估壘打數 */
 function slgOf(st){
@@ -1196,7 +1220,8 @@ function awards(bucket,st){
   if(S.pos==='P'){
     const aw='年度最佳投手';
     if(isSP()&&st.d>=7&&st.era<=3.00&&st.IP>=150&&chance(30))h.push(`${y} ${aw}`);
-    if(S.role==='CL'&&st.SV>=32&&chance(25))h.push(`${y} ${lgN}救援王`);
+    if(S.role==='CL'&&st.SV>=(bucket==='CPBL'?25:32)&&chance(28))h.push(`${y} ${lgN}救援王`);
+    if(S.role==='MR'&&(st.HLD||0)>=(bucket==='CPBL'?20:25)&&chance(28))h.push(`${y} ${lgN}中繼王`);
     if(st.d>=6&&st.SO>=(bucket==='CPBL'?150:180)&&chance(25))h.push(`${y} ${lgN}三振王`);
   }else{
     if(st.d>=6&&st.avg>=0.308&&st.PA>=350&&chance(25))h.push(`${y} ${lgN}打擊王`);
@@ -1602,8 +1627,17 @@ function careerScore(st){
   if(S.pos==='P')return st.W*13+st.SV*6+st.SO*0.9+st.IP*0.35;
   return st.H+st.HR*3+st.SB*0.8+st.RBI*0.5+st.BB*0.3+Math.max(0,st.DEF||0)*6;
 }
-function primaryPos(){ /* 生涯主守位:過半→該位;無過半→工具人(非DH,年數降序) */
-  if(S.pos==='P')return roleN(S.role)+'投手';
+function roleName3(r){ return {SP:'先發投手',MR:'中繼投手',CL:'終結者'}[r]||'投手'; }
+function primaryPos(){ /* 生涯主守位:過半→該位;無過半→工具人/搖擺人(年數降序) */
+  if(S.pos==='P'){
+    const ry=S.roleYears||{}; const tot=Object.values(ry).reduce((a,b)=>a+b,0);
+    if(!tot)return roleName3(S.role);
+    const es=Object.entries(ry).sort((a,b)=>b[1]-a[1]);
+    if(es[0][1]>=tot/2)return roleName3(es[0][0]); /* 有過半 */
+    /* 無過半:搖擺人(附主要兩種定位) */
+    const list=es.map(e=>({SP:'先發',MR:'中繼',CL:'終結者'}[e[0]]||'')).filter(Boolean);
+    return '搖擺人('+list.slice(0,2).join('、')+')';
+  }
   const dy=S.dposYears||{}; const total=Object.values(dy).reduce((a,b)=>a+b,0);
   if(!total)return S.dpos?DPN[S.dpos]:POSN[S.pos];
   const entries=Object.entries(dy).sort((a,b)=>b[1]-a[1]);
@@ -1667,8 +1701,9 @@ function statTable(bucket){
   let rows;
   if(S.pos==='P'){
     const era=st.IP>0?(st.ER*9/st.IP).toFixed(2):'-';
-    rows=`<tr><th>年資</th><th>出賽</th><th>局數</th><th>勝</th><th>敗</th><th>救援</th><th>三振</th><th>ERA</th></tr>
-    <tr><td>${st.yr}</td><td>${st.G}</td><td>${st.IP.toFixed(0)}</td><td>${st.W}</td><td>${st.L}</td><td>${st.SV}</td><td>${st.SO}</td><td>${era}</td></tr>`;
+    const whip=st.IP>0?((st.H+st.BB)/st.IP).toFixed(2):'-';
+    rows=`<tr><th>年資</th><th>出賽</th><th>局數</th><th>勝</th><th>敗</th><th>救援</th><th>中繼</th><th>三振</th><th>保送</th><th>ERA</th><th>WHIP</th></tr>
+    <tr><td>${st.yr}</td><td>${st.G}</td><td>${fmtIP(st.IP)}</td><td>${st.W}</td><td>${st.L}</td><td>${st.SV||0}</td><td>${st.HLD||0}</td><td>${st.SO}</td><td>${st.BB||0}</td><td>${era}</td><td>${whip}</td></tr>`;
   }else{
     const avg=st.AB>0?(st.H/st.AB).toFixed(3).replace(/^0/,''):'-';
     const obp=st.PA>0?((st.H+st.BB)/st.PA).toFixed(3).replace(/^0/,''):'-';
@@ -1917,14 +1952,14 @@ function shareImage(evals,out){
 
   // 生涯數據表
   hr(); sectionTitle('生涯累積數據');
-  const cols=isP?[['聯盟',110],['年',44],['出賽',56],['局數',64],['勝',44],['敗',44],['救援',56],['三振',60],['ERA',60]]
+  const cols=isP?[['聯盟',96],['年',36],['出賽',48],['局數',54],['勝',36],['敗',36],['救援',48],['中繼',48],['三振',52],['保送',48],['ERA',52],['WHIP',54]]
                 :[['聯盟',110],['年',44],['出賽',56],['打率',66],['上壘',66],['安打',60],['HR',48],['打點',56],['盜壘',52],['守備',56]];
   function row(cells,head){ let x=PAD; c.font=(head?'bold ':'')+'13px monospace'; c.fillStyle=head?'#8fae9c':'#e8efe9';
     cells.forEach(function(cell,i){ c.fillText(String(cell),x,y); x+=cols[i][1]; }); y+=head?24:26; }
   row(cols.map(cc=>cc[0]),true);
   leagues.forEach(function(b){ const st=S.stats[b];
-    if(isP){ const era=st.IP>0?(st.ER*9/st.IP).toFixed(2):'-';
-      row([LG_N[b],st.yr,st.G,st.IP.toFixed(0),st.W,st.L,st.SV,st.SO,era]); }
+    if(isP){ const era=st.IP>0?(st.ER*9/st.IP).toFixed(2):'-'; const whip=st.IP>0?((st.H+st.BB)/st.IP).toFixed(2):'-';
+      row([LG_N[b],st.yr,st.G,fmtIP(st.IP),st.W,st.L,st.SV||0,st.HLD||0,st.SO,st.BB||0,era,whip]); }
     else{ const avg=st.AB>0?(st.H/st.AB).toFixed(3).replace(/^0/,''):'-';
       const obp=st.PA>0?((st.H+st.BB)/st.PA).toFixed(3).replace(/^0/,''):'-';
       row([LG_N[b],st.yr,st.G,avg,obp,st.H,st.HR,st.RBI,st.SB,(st.DEF>0?'+':'')+(st.DEF||0)]); } });
