@@ -801,15 +801,15 @@ function loveEvent(next){
         choose(`聚餐散場，${t} 說順路想搭你的車`,[
           {t:'讓她上車（賭一把）',warn:true,s:'沒被抓到＝體力提升｜被抓到＝能力下跌、當年分手率+30%',f:()=>{
             L.affairs++;
-            if(chance(55)){ const g=addAb('sta',2); board(1);
+            if(chance(55)){ const g=addAbStat('sta',2); board(1);
               card('bad','深夜兜風',`沒有人拍到。你把方向盤握得很緊——<b class="up">體力 +${g}</b>。（這條路不會有好結局）`); ask(); }
             else loveCaughtDating(next); }},
           {t:`「不順路。」直接載 ${L.partner} 回家`,main:true,s:'感情穩固，絕對不虧',f:()=>{
-            const g=addAb('sta',1); board(1);
+            const g=addAbStat('sta',1); board(1);
             card('good','正確答案',`你傳訊息給 ${L.partner}：「馬上到。」——<b class="up">體力 +${g||1}</b>。`); ask(); }}]); return; }
-      if(r<70){ const g=addAb('sta',1); board(1);
+      if(r<70){ const g=addAbStat('sta',1); board(1);
         card('good','明星賽放閃',`明星賽表演賽，鏡頭掃到看台上的 <b class="hl">${L.partner}</b>，你隔著全場比了一個手勢，轉播單位立刻切出愛心特效，隔天甜上熱搜——<b class="up">體力 +${g||1}</b>。`); ask(); return; }
-      const g=addAb('sta',1); board(1);
+      const g=addAbStat('sta',1); board(1);
       card('good','愛情長跑',`交往邁入第 ${y} 年。沒有大新聞，只有每個客場系列賽結束後，機場出口那杯她替你買好的熱美式——<b class="up">體力 +${g||1}</b>。`); ask(); return; }
     ask(); return;
   }
@@ -822,7 +822,7 @@ function loveEvent(next){
     choose('記者把麥克風遞到你面前：「兩位是在交往嗎？」',[
       {t:'大方承認：「請大家祝福我們」',s:'還要看她那邊敢不敢承認（球團有禁愛令傳聞）',f:()=>{
         if(chance(65)){ L.st='dating'; L.partner=p; L.dyrs=0; L.datedTimes=(L.datedTimes||0)+1;
-          const g=addAb('sta',1); board(1);
+          const g=addAbStat('sta',1); board(1);
           card('gold','戀情公開',`<b class="hl">${p}</b> 在社群發出十指緊扣的照片：「謝謝大家的祝福。」戀愛使人容光煥發——<b class="up">體力 +${g||1}</b>。你們正式交往了。`);
           if(L.datedTimes>=3&&L.kids===0&&!S.traits.married&&!S.traits.confidante){ S.traits.confidante=true;
             card('gold','隱藏稱號：閨中密友',`第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。`); board(1); }
@@ -834,7 +834,7 @@ function loveEvent(next){
   }
   /* ---------- 已婚 ---------- */
   if(L.kids<4&&chance([65,45,30,20][L.kids])){ /* 生子:第一胎最優先,越生越少 */
-    L.kids++; const kk=pick(POS_AB[S.pos]); const g=addAb(kk,2); board(1);
+    L.kids++; const kk=pick(POS_AB[S.pos]); const g=addAbStat(kk,2); board(1);
     card('gold','新生命',`${L.partner} 平安生下你們的第 <b class="hl">${L.kids}</b> 個孩子。當了${L.kids>1?'幾次':''}爸爸的男人，眼神都不一樣了——<b class="up">${ABL[kk]} +${g}</b>。`);
     next(); return;
   }
@@ -844,18 +844,18 @@ function loveEvent(next){
     choose(`客場飯店酒吧，${t} 傳來訊息：「睡了嗎？」`,[
       {t:'赴約（賭一把）',warn:true,s:'沒被抓到＝體力提升｜被抓到＝能力下跌、婚姻危機',f:()=>{
         L.affairs++;
-        if(chance(55)){ const g=addAb('sta',2); board(1);
+        if(chance(55)){ const g=addAbStat('sta',2); board(1);
           card('bad','深夜行程',`你僥倖沒被拍到。不知為何，罪惡感反而讓你精神亢奮——<b class="up">體力 +${g}</b>。（你知道這不會有好下場）`);
           next(); }
         else loveCaught(next); }},
       {t:'回訊息：「陪小孩讀完故事書了，晚安」',main:true,s:'家庭和睦，絕對不虧',f:()=>{
-        const g=addAb('sta',1); board(1);
+        const g=addAbStat('sta',1); board(1);
         card('good','家的方向',`你把手機扣在桌上，撥了視訊回家。${L.partner} 和孩子在鏡頭那頭揮手。心定了，身體就穩了——<b class="up">體力 +${g||1}</b>。`); next(); }}]); return; }
   if(r<70&&L.kids>0){ /* 愛小孩新聞 */
-    const g=addAb('sta',1); board(1);
+    const g=addAbStat('sta',1); board(1);
     card('good','球場邊的父親',`你被拍到賽前隔著護網教孩子怎麼戴手套，影片配文「最強棒球教室」瘋傳。網友：「這才是人生勝利組。」——<b class="up">體力 +${g||1}</b>。`); next(); return; }
   /* 結婚紀念日 */
-  const g=addAb('sta',1); board(1);
+  const g=addAbStat('sta',1); board(1);
   card('good','結婚紀念日',`結婚紀念日，你推掉了自主訓練，陪 <b class="hl">${L.partner}</b> 回到當年辦婚禮的場地。她說：「明年也要來喔。」——<b class="up">體力 +${g||1}</b>。`); next();
 }
 function divorceRec(){ const L=S.love;
@@ -913,6 +913,13 @@ function loveCaughtDating(next){
     {t:'坦然分手',f:()=>{ const ex=L.partner;
       L.st=L.exes.length?'divorced':'single'; L.partner=null; L.dyrs=0;
       card('bad','分手',`<b class="hl">${ex}</b> 的限時動態只有一片黑。粉絲全都知道是誰的錯。`); next(); }}]);
+}
+function addAbStat(k,amt){ /* 正向加能力,滿上限則轉當季成績;回傳實際加的能力值(給文案用) */
+  if(amt<=0)return addAb(k,amt);
+  let gained=0, overflow=0;
+  for(let i=0;i<amt;i++){ const g=addAb(k,1); if(g>0)gained+=g; else overflow++; }
+  if(overflow>0)S.pendStat=(S.pendStat||0)+overflow;
+  return gained;
 }
 function statBonus(pts,out){ /* 能力已達潛力上限,獎勵轉成當季成績加成(下次結算套用) */
   S.pendStat=(S.pendStat||0)+pts;
