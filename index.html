@@ -577,7 +577,7 @@ function simSeason(lv){
     st.G=Math.round(L.g*clamp(staF*perfF,0.10,1.0)*f*(0.95+R()*0.06));
     st.PA=Math.round(st.G*4.25);
     st._dh=dhThisYear; /* 供 accStat 記 DH 年 */
-    st.BB=Math.round(st.PA*clamp(0.055+(a.eye-par)*0.0032,0.025,0.17));
+    st.BB=Math.round(st.PA*clamp(0.062+(a.eye-par)*0.0034,0.045,0.17));
     st.AB=st.PA-st.BB;
     st.avg=clamp(0.252+d*0.0058+(a.sta-50)*0.0003+(a.spd-par)*0.0006+N0(0.014),0.140,0.380);
     st.H=Math.round(st.AB*st.avg); st.avg=st.AB?st.H/st.AB:0;
@@ -618,7 +618,7 @@ function statLine(st){
   const obp=st.PA>0?obpN.toFixed(3).replace(/^0/,''):'-';
   const slg=st.AB>0?slgN.toFixed(3).replace(/^0/,''):'-';
   const ops=st.AB>0?(obpN+slgN).toFixed(3).replace(/^0/,''):'-';
-  return `出賽 ${st.G}｜打席 ${st.PA}｜打擊率 ${st.avg.toFixed(3).replace(/^0/,'')}｜上壘率 ${obp}｜長打率 ${slg}｜OPS ${ops}｜安打 ${st.H}｜全壘打 ${st.HR}｜打點 ${st.RBI}｜盜壘 ${st.SB}${st.DEF!==undefined?`｜守備 ${st.DEF>0?'+':''}${st.DEF}`:''}`;
+  return `出賽 ${st.G}｜打席 ${st.PA}｜打擊率 ${st.avg.toFixed(3).replace(/^0/,'')}｜上壘率 ${obp}｜長打率 ${slg}｜OPS ${ops}｜安打 ${st.H}｜全壘打 ${st.HR}｜打點 ${st.RBI}｜保送 ${st.BB}｜盜壘 ${st.SB}${st.DEF!==undefined?`｜守備 ${st.DEF>0?'+':''}${st.DEF}`:''}`;
 }
 /* 長打率估算:無二三壘數據,依全壘打比例與力量推估壘打數 */
 function slgOf(st){
