@@ -769,9 +769,9 @@ function drawEvents(n,done){
     const base=(S.traits.genius||S.traits.late)?70:50;
     const after=()=>{ board(1); drawEvents(n-1,done); };
     choose(`事件｜${ev.n} — 你要怎麼應對？`,[
-      {t:'全力一搏',warn:true,s:`成功率 ${base-15}%｜成功效果×2、失敗懲罰×2`,f:()=>{resolveEvent(ev,'bold',after);}},
-      {t:'照常執行',main:true,s:`成功率 ${base}%｜原始效果`,f:()=>{resolveEvent(ev,'norm',after);}},
-      {t:'保守應對',s:`成功率 ${Math.min(95,base+20)}%｜成功與失敗效果皆減半`,f:()=>{resolveEvent(ev,'safe',after);}}]);
+      {t:'全力一搏',warn:true,s:`成功率 ${base-15}%｜加成／減益幅度最大（±3）`,f:()=>{resolveEvent(ev,'bold',after);}},
+      {t:'照常執行',main:true,s:`成功率 ${base}%｜標準幅度（±2）`,f:()=>{resolveEvent(ev,'norm',after);}},
+      {t:'保守應對',s:`成功率 ${Math.min(95,base+20)}%｜加成／減益幅度最小（±1）`,f:()=>{resolveEvent(ev,'safe',after);}}]);
   }}]);
 }
 /* 出廠預設為全虛構人名;玩家可透過隱藏編輯器自訂名單(僅存於玩家本機) */
