@@ -668,9 +668,21 @@ function card(cls,title,html){ const d=document.createElement('div'); d.classNam
   scrollBottom(); }
 function divider(t){ /* 每個 divider 開啟新的年度摺疊區塊 */
   const log=$('log');
-  /* 摺疊上一個年度區塊 */
-  const prev=log.querySelector('.yr-block:last-child');
-  if(prev){ prev.classList.add('collapsed'); const h=prev.querySelector('.yr-head'); if(h&&prev.querySelector('.yr-body').children.length)h.classList.add('has-body'); }
+  const blocks=log.querySelectorAll('.yr-block');
+  
+  /* 替剛結束的「上一年」加上下拉箭頭標記，但保留展開（不加上 collapsed） */
+  const prev = blocks[blocks.length - 1];
+  if(prev){
+    const h = prev.querySelector('.yr-head');
+    if(h && prev.querySelector('.yr-body').children.length) h.classList.add('has-body');
+  }
+  
+  /* 找到「前年」（倒數第二個區塊）並將其摺疊起來 */
+  const prevPrev = blocks[blocks.length - 2];
+  if(prevPrev){
+    prevPrev.classList.add('collapsed');
+  }
+
   /* 建新區塊 */
   const block=document.createElement('div'); block.className='yr-block';
   const head=document.createElement('div'); head.className='yr-head'; head.textContent=t;
@@ -678,10 +690,12 @@ function divider(t){ /* 每個 divider 開啟新的年度摺疊區塊 */
   head.onclick=()=>block.classList.toggle('collapsed');
   block.appendChild(head); block.appendChild(body); log.appendChild(block);
   _curYearBody=body;
+  
   /* 超過上限:移除最舊的年度區塊(釋放 DOM) */
-  const blocks=log.querySelectorAll('.yr-block');
-  if(blocks.length>MAX_YEARS){ for(let i=0;i<blocks.length-MAX_YEARS;i++)blocks[i].remove(); }
+  const newBlocks=log.querySelectorAll('.yr-block');
+  if(newBlocks.length>MAX_YEARS){ for(let i=0;i<newBlocks.length-MAX_YEARS;i++)newBlocks[i].remove(); }
 }
+
 function board(phase){
   $('bd-name').innerHTML=`${S.name}<small>${S.dpos?DPN[S.dpos]:POSN[S.pos]}${S.role?'·'+roleN(S.role):''}·${playerType()}${S.traits.genius?' ★':''}</small>`;
   let t;
