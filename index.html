@@ -213,15 +213,31 @@ const DPN={SS:'游擊手','2B':'二壘手','3B':'三壘手','1B':'一壘手',
  CF:'中外野手',RF:'右外野手',LF:'左外野手',DH:'指定打擊',C:'捕手'};
 /* 每個守位對 範圍/接球/臂力 各有自己的門檻(相對聯盟基準的位移)
    例:三壘不需要游擊等級的範圍,一壘的臂力幾乎不看 */
-const DP_REQ={
- SS:{rng:+5,fld:+3,arm:+3},
- CF:{rng:+4,fld: 0,arm:+1},
- '2B':{rng:+2,fld:+2,arm:-6},
- '3B':{rng:-6,fld:-1,arm:+2},
- RF:{rng:-3,fld:-1,arm:+2},
- LF:{rng:-3,fld:-1,arm:-8},
- '1B':{rng:-10,fld:-8,arm:-12}};
-const DP_BAR={CPBL1:45,NPB1:54,MLB:60}; /* 三聯盟守備標準:大聯盟最嚴 */
+/* 各守位守備分公式:依守位看重不同能力(回傳一個綜合守備分) */
+function dpScore(p){ const a=S.ab;
+  switch(p){
+    case 'SS': return a.rng*0.5 + a.fld*0.3 + a.arm*0.2;   /* 游擊:範圍主導 */
+    case '2B': return a.rng*0.45+ a.fld*0.4 + a.arm*0.15;  /* 二壘:範圍+守備,臂力次要 */
+    case '3B': return a.arm*0.45+ a.fld*0.35+ a.rng*0.2;   /* 三壘:臂力主導 */
+    case 'CF': return a.rng*0.55+ a.fld*0.3 + a.arm*0.15;  /* 中外野:範圍主導 */
+    case 'RF': return a.arm*0.45+ a.rng*0.35+ a.fld*0.2;   /* 右外野:強臂 */
+    case 'LF': return a.rng*0.4 + a.fld*0.35+ a.arm*0.25;  /* 左外野:範圍為主,要求低 */
+    case 'C':  return a.fld*0.4 + a.cat*0.4 + a.arm*0.2;   /* 捕手:接球+配球+臂力,不看範圍 */
+    case '1B': return a.fld*0.6 + a.rng*0.2 + a.arm*0.2;   /* 一壘:守備為主,門檻低 */
+    default: return 99;
+  }
+}
+/* 各守位 × 各聯盟 守備門檻(守備分需 >= 此值才守得動);大聯盟最嚴 */
+const DP_TH={
+  C:  {CPBL1:46, NPB1:54, MLB:60},
+  SS: {CPBL1:50, NPB1:58, MLB:64},
+  CF: {CPBL1:49, NPB1:57, MLB:63},
+  '2B':{CPBL1:46,NPB1:53, MLB:59},
+  '3B':{CPBL1:44,NPB1:51, MLB:57},
+  RF: {CPBL1:43, NPB1:50, MLB:56},
+  LF: {CPBL1:41, NPB1:47, MLB:53},
+  '1B':{CPBL1:36,NPB1:42, MLB:48}};
+const DP_BAR={CPBL1:45,NPB1:54,MLB:60}; /* 保留給捕手 cOk 等舊判定 */
 const DP_MULT={SS:1.15,CF:1.15,C:1.12,'2B':1.05,'3B':1.05,RF:1.05,'1B':1.0,LF:1.0,DH:0.92};
 function dpBar(){ /* 年輕球員吃潛力紅利,球團不急著拔守位 */
   const base=DP_BAR[S.lv]||0;
@@ -230,21 +246,17 @@ function dpBar(){ /* 年輕球員吃潛力紅利,球團不急著拔守位 */
 }
 function dpQual(p){
   if(p==='DH')return true;
-  if(!DP_BAR[S.lv])return true;
-  const bar=dpBar(), req=DP_REQ[p], a=S.ab;
-  return Object.keys(req).every(k=>a[k]>=bar+req[k]);
+  if(!DP_TH[p]||!DP_TH[p][S.lv])return true;   /* 非頂級聯盟不設限 */
+  /* 年輕球員吃潛力紅利:門檻略降(球團給時間成長) */
+  const youthAdj = S.age<24?-3 : S.age<26?-1.5 : 0;
+  return dpScore(p) >= DP_TH[p][S.lv]+youthAdj;
 }
-const DP_RANK={SS:0,CF:0,'2B':1,'3B':1,RF:1,'1B':2,LF:2,DH:3,C:0};
-function dpList(){ /* 依身價排序,同級優先本行;二三壘依臂力分流 */
-  const a=S.ab, strongArm=a.arm>=a.rng+3; /* 臂力明顯強於範圍 → 偏三壘 */
-  const tier2=S.pos==='IF'
-    ? (strongArm?['3B','2B','RF']:['2B','3B','RF'])  /* 強臂先試三壘,弱臂先試二壘 */
-    : ['RF','2B','3B'];
-  const tiers=[['SS','CF'],tier2,['1B','LF']];
-  const order=[];
-  tiers.forEach(t=>{ const inf=t.filter(p=>['SS','2B','3B','1B'].includes(p)),
-    of=t.filter(p=>['CF','RF','LF'].includes(p));
-    (S.pos==='IF'?t:[...of,...inf]).forEach(p=>order.push(p)); });
+const DP_RANK={SS:0,CF:0,'2B':1,'3B':2,RF:2,'1B':3,LF:3,DH:4,C:0}; /* 守位身價階層(SS>2B>3B) */
+function dpList(){ /* 依守位難度掃描:內野手守內野序、外野手守外野序,選出守得動的(最高階在前) */
+  /* 候選守位依當前守位群:內野走內野光譜、外野走外野光譜 */
+  const order = S.pos==='IF'
+    ? ['SS','2B','3B','1B']       /* 內野:游擊>二壘>三壘>一壘 */
+    : ['CF','RF','LF','1B'];      /* 外野:中外野>右外野>左外野>(一壘) */
   const q=order.filter(dpQual); q.push('DH'); return q;
 }
 function dpMult(){ return (S.pos!=='P'&&S.dpos)?(DP_MULT[S.dpos]||1):1; }
@@ -365,7 +377,7 @@ function newState(name,pos,role){
     cntSave:0,cntSnack:0,cntBoldWin:0,cntBoldFail:0,samePick:0,samePickKey:null,teamYears:0,
     six:0,bigInj:0,ironStreak:0,npbYears:0,
     injNext:0,tmpInj:0,rehab:0,salary:0,pool:0,seasonFactor:1,
-    stats:{CPBL:null,NPB:null,MLB:null,MINOR:null},honors:[],intlCount:0,intlLock:null,dpos:null,dposYears:{},roleYears:{},tradeRefuse:0,champThisTeam:false,svc:0,faElig:false,tradeHeat:0,complainCount:0,demotionRefused:false,tj:0,tjCount:0,effort:'普通',tjSuccess:0,love:{st:'single',partner:null,kids:0,caught:0,affairs:0,exes:[],dyrs:0,datedTimes:0},traits2:{},log:[],ct:null,done:false};
+    stats:{CPBL:null,NPB:null,MLB:null,MINOR:null},honors:[],intlCount:0,intlLock:null,intlStat:{G:0,PA:0,AB:0,H:0,HR:0,RBI:0,IP:0,SO:0,ER:0,W:0,SV:0},intlBest:null,dpos:null,dposYears:{},roleYears:{},tradeRefuse:0,champThisTeam:false,svc:0,svcOrg:null,faElig:false,tradeHeat:0,complainCount:0,demotionRefused:false,tj:0,tjCount:0,effort:'普通',tjSuccess:0,love:{st:'single',partner:null,kids:0,caught:0,affairs:0,exes:[],dyrs:0,datedTimes:0},traits2:{},log:[],ct:null,done:false};
 }
 function blankStat(){return {yr:0,G:0,PA:0,AB:0,H:0,HR:0,RBI:0,SB:0,BB:0,W:0,L:0,SV:0,HLD:0,IP:0,SO:0,ER:0,AS:0,DEF:0};}
 function bucketOf(lv){ const l=lv&&LV[lv]; return l&&l.top?l.top:'MINOR'; } /* 業餘引退時 lv 為空,歸類 MINOR */
@@ -461,10 +473,11 @@ function ovr(){
     return Math.round(arr[0]*0.42+arr[1]*0.30+arr[2]*0.18+a.sta*0.10); }
   const off=[a.con,a.pow,a.eye,a.spd].sort((x,y)=>y-x);
   const offv=off[0]*0.38+off[1]*0.27+off[2]*0.20+off[3]*0.15;
-  const defKeys=S.pos==='C'?['rng','fld','arm','cat']:['rng','fld','arm'];
-  const def=defKeys.reduce((t,k)=>t+a[k],0)/defKeys.length;
-  /* 守備權重依當下守位(OOTP式):守備位越吃重,守備占比越高;DH 幾乎純看打擊 */
-  const dw=S.dpos?({SS:0.28,CF:0.28,C:0.26,'2B':0.20,'3B':0.20,RF:0.20,'1B':0.12,LF:0.12,DH:0.04})[S.dpos]??0.2:0.2;
+  /* 守備分:用當前守位的 dpScore(與守位門檻系統一致);未定守位則取最佳可守守位的分 */
+  const dpForOvr = S.dpos || (S.pos==='C'?'C':(S.pos==='OF'?'CF':'SS'));
+  const def = dpScore(dpForOvr);
+  /* 守備權重:關鍵守位(SS/CF/C)最高 30%,角落降低,DH 幾乎純打擊 */
+  const dw=S.dpos?({SS:0.30,CF:0.30,C:0.30,'2B':0.22,'3B':0.22,RF:0.20,'1B':0.12,LF:0.14,DH:0.04})[S.dpos]??0.22:0.24;
   let v=Math.round(offv*(1-dw)+def*dw);
   if(S.traits.yips)v-=3; /* 失憶症:心理陰影,系統評價 -3 */
   return v;
@@ -499,8 +512,8 @@ function addAb(k,v){ if(!(k in S.ab))return 0; const o=S.ab[k];
   const pk=(S&&S.pot&&S.pot[k])||62;
   const isP=S&&S.pos==='P';
   while(bud>0&&cur<80){
-    let cost=isP?(cur>=75?4:cur>=70?3:cur>=60?2:1)
-              :(cur>=75?3:cur>=70?2:1); /* 野手要養 8 項,階梯放寬 */
+    let cost=isP?(cur>=66?7:cur>=58?4:cur>=50?2:1)      /* 投手只有4項,養成成本最陡 */
+              :(cur>=72?3:cur>=64?2:1);                    /* 野手9項,中高段變貴 */
     if(cur>=pk)cost*=isP?4:3; /* 天花板之上:投手×4、野手×3 */
     if(bud>=cost){bud-=cost;cur++;} else break; }
   S.carry[k]=cur>=80?0:bud;
@@ -530,9 +543,9 @@ function simSeason(lv){
     if(isSP()){
       const gs=Math.round(clamp(20+(a.sta-40)*0.18,10,30)*f*perfF*(0.94+R()*0.08));
       st.G=Math.max(1,gs);
-      /* 控球差→用球數兇→單場局數略減 */
-      const ctlIP=clamp((a.ctl-par)*0.012,-0.5,0.4);
-      st.IP=+(st.G*clamp(4.6+(a.sta-40)*0.05+ctlIP,3.6,7.0)).toFixed(1);
+      /* IP/GS:聯盟平均~5.0、優質先發5.2-6.0、工作馬6.1-6.5;由 d 值(綜合實力)決定,控球差略減 */
+      const ipg=clamp(5.0+d*0.05+(a.sta-50)*0.012+(a.ctl-par)*0.006+N0(0.12),4.8,6.5);
+      st.IP=+(st.G*ipg).toFixed(1);
     }else{
       st.G=Math.max(1,Math.round(clamp(45+(a.sta-40)*0.3,25,68)*f*perfF*(0.94+R()*0.08)));
       st.IP=+(st.G*1.05).toFixed(1);
@@ -921,8 +934,9 @@ function proposalAsk(next){
   choose(`交往第 ${L.dyrs} 年——${L.partner} 看著別人的婚禮影片看了很久`,[
     {t:'就是現在——求婚',s:'固定加成：全體力提升、本季更不容易受傷',f:()=>{
       L.st='married'; L.kids=0; L.dyrs=0;
-      const g2=addAb('sta',2); S.tmpInj-=5; board(1);
-      card('gold','婚禮',`你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。<b class="hl">${L.partner}</b> 哭著點頭。休賽季完婚，紅毯用壘包排成——<b class="up">體力 +${g2}</b>、本季受傷機率 <b class="up">−5%</b>。`); next(); }},
+      const g2=addAbStat('sta',2); S.tmpInj-=5; board(1);
+      const gTxt=g2>0?`<b class="up">體力 +${g2}</b>、`:`<b class="up">狀態火燙（成績加成）</b>、`;
+      card('gold','婚禮',`你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。<b class="hl">${L.partner}</b> 哭著點頭。休賽季完婚，紅毯用壘包排成——${gTxt}本季受傷機率 <b class="up">−5%</b>。`); next(); }},
     {t:'再存一點錢吧',main:true,s:'她沒說什麼,但交往越久分手風險越高',f:()=>{
       card('info','再等等','她關掉影片，笑著說沒事。你假裝沒看到她眼裡的東西。'); next(); }}]);
 }
@@ -1259,7 +1273,7 @@ function awards(bucket,st){
 }
 function maybeIntl(done){
   const wbc=(S.year-2026)%4===0, p12=(S.year-2028)%4===0;
-  if(S.stage!=='PRO'||(!wbc&&!p12)||ovr()<52||S.seasonFactor<0.5){ done(); return; }
+  if(S.stage!=='PRO'||(!wbc&&!p12)||ovr()<52||S.seasonFactor<0.5||S.rehab>0||S.skipMid){ done(); return; } /* 復健年/報銷年不徵召 */
   const name=wbc?'世界棒球經典賽':'世界12強賽';
   let forced=false,first=false;
   if(S.intlLock===null){ S.intlLock=S.year; forced=true; first=true; }
@@ -1277,6 +1291,22 @@ function maybeIntl(done){
       const rk=['冠軍','亞軍','季軍','複賽止步','預賽出局'][i], pts=[6,5,4,2,1][i];
       let gpts=pts; if(S.traits.intlace)gpts=Math.max(pts,2);
       S.pool+=gpts; S.injNext=S.traits.intlace?0:10; S.intlCount++;
+      /* 累積國際賽個人成績(一屆約 6-8 場),依能力 d 值決定表現 */
+      { const a=S.ab, par=52; const IS=S.intlStat;
+        if(S.pos==='P'){ const dd=(a.vel+a.ctl+a.brk)/3-par;
+          const ip=+(ri(4,9)+R()*3).toFixed(1); IS.IP=+(IS.IP+ip).toFixed(1);
+          const k9=clamp(7.5+dd*0.12,4,14); IS.SO+=Math.round(ip/9*k9);
+          const era=clamp(3.6-dd*0.16,0.8,8); IS.ER+=Math.round(era*ip/9);
+          if(i<=2&&chance(45))IS.W++; if(!isSP()&&chance(30))IS.SV++;
+          IS.G+=ri(1,3);
+        } else { const dd=(a.con*0.6+a.eye*0.2+a.spd*0.2)-par;
+          const g=ri(5,8), pa=g*ri(3,4); IS.G+=g; IS.PA+=pa;
+          const ab=Math.round(pa*0.86); IS.AB+=ab;
+          const avg=clamp(0.270+dd*0.006,0.15,0.5); const h=Math.round(ab*avg); IS.H+=h;
+          const hr=Math.round(h*clamp(0.06+Math.max(0,a.pow-par)*0.006,0.03,0.28)); IS.HR+=hr;
+          IS.RBI+=Math.round(hr*2.1+h*0.35);
+        }
+      }
       if(i<=1)S.intlTop4=(S.intlTop4||0)+1; /* 需打進冠亞軍才算 */
       if(!S.traits.intlace&&S.intlCount>=3&&(S.intlTop4||0)>=2){ S.traits.intlace=true;
         card('gold','隱藏屬性解鎖：國際賽之鬼','只要穿上 CT 球衣，你的痛覺就會消失——你是為大場面而生的男人。<b class="hl">國際賽不再增加受傷風險，且每次徵召能力點保底 +2</b>。'); }
@@ -1328,7 +1358,12 @@ function movement(){
   if(S.skipMid){ advance(); return; } /* 復健年不異動 */
   if(o<30){ endGame('能力已跌破中職二軍最低水準，'+S.year+' 年球季後遭釋出，被迫引退。'); return; }
   if(S.org==='NPB')S.npbYears++;
-  if(LV[S.lv].top){ S.svc=(S.svc||0)+1; if(S.svc>=5)S.faElig=true; }
+  if(LV[S.lv].top){
+    /* 控制權只在同一聯盟內累積:跨聯盟(旅外)則服務年資重置 */
+    if(S.svcOrg && S.svcOrg!==S.org){ S.svc=0; S.faElig=false; }
+    S.svcOrg=S.org;
+    S.svc=(S.svc||0)+1; if(S.svc>=5)S.faElig=true;
+  }
   /* 神主牌:同隊連續年數(轉隊會歸零,見 doTrade/signTo) */
   if(S.stage==='PRO'&&LV[S.lv].top){ S.teamYears=(S.teamYears||0)+1;
     if(!S.traits.goldcloth&&S.orgTeam==='台中猛瑪'&&(S.teamTally.CPBL&&S.teamTally.CPBL['台中猛瑪']>=10)){ S.traits.goldcloth=true;
@@ -1453,22 +1488,30 @@ function makeOffers(org,n,bonusBase,yrsLo,yrsHi,lv,exclude){
   return teams.map(t=>({team:t,bonus:Math.round(bonusBase*(0.8+R()*0.5)),yrs:ri(yrsLo,yrsHi),lv,mult:1}));
 }
 /* ---------- 長約/短約 選擇器 ---------- */
-function termParams(d,lv){ /* 算長/短約年限與係數 */
+function termParams(d,lv){ /* 長約 >2 年、短約 1-2 年;年齡大或成績爛 → 不夠格長約 */
   const cap=S.pos==='P'?7:15;
-  const longY=faYears(d,cap), shortY=Math.max(1,Math.min(3,Math.round(longY*0.4)||1));
+  const maxY=faYears(d,cap);              /* 已含年齡上限 */
+  const longEligible = maxY>2 && d>=0;    /* 值得長約:年限>2 且成績不差(d>=0) */
+  const longY=Math.max(3,maxY);           /* 長約至少 3 年 */
+  const shortY=Math.min(2,Math.max(1,maxY)); /* 短約 1-2 年 */
   let baseM=d>=3?1.2:d>=0?1:0.8;
   if(S.traits.franchise)baseM=Math.max(baseM,1.2);
   if(S.tradeRefuse>0)baseM*=0.67;
-  return {longY,shortY,longM:+(baseM*0.92).toFixed(2),shortM:+(baseM*1.12).toFixed(2)};
+  return {longEligible,longY,shortY,longM:+(baseM*0.92).toFixed(2),shortM:+(baseM*1.12).toFixed(2)};
 }
 function termChoice(o,d,baseTitle,onPick,onReject){
   const tp=termParams(d,S.lv);
   const est=(y,m)=>fmtMoney(Math.round(salaryFor(S.lv,d)*m));
-  const opts=[
-    {t:`長約（${tp.longY} 年）`,main:true,s:`年限長、年薪係數略低 ×${tp.longM}（估 ${est(tp.longY,tp.longM)}/年）｜穩定保障`,
-      f:()=>onPick(tp.longY,tp.longM)},
-    {t:`短約（${tp.shortY} 年）`,warn:true,s:`年限短、年薪係數高 ×${tp.shortM}（估 ${est(tp.shortY,tp.shortM)}/年）｜賭下次身價`,
-      f:()=>onPick(tp.shortY,tp.shortM)}];
+  const opts=[];
+  if(tp.longEligible){ /* 夠格才給長約選項 */
+    opts.push({t:`長約（${tp.longY} 年）`,main:true,s:`年限長、年薪係數略低 ×${tp.longM}（估 ${est(tp.longY,tp.longM)}/年）｜穩定保障`,
+      f:()=>onPick(tp.longY,tp.longM)});
+    opts.push({t:`短約（${tp.shortY} 年）`,warn:true,s:`年限短、年薪係數高 ×${tp.shortM}（估 ${est(tp.shortY,tp.shortM)}/年）｜賭下次身價`,
+      f:()=>onPick(tp.shortY,tp.shortM)});
+  } else { /* 年齡大或成績不佳:只能短約(不出現長約) */
+    opts.push({t:`短約（${tp.shortY} 年）`,main:true,s:`年限短、年薪係數 ×${tp.shortM}（估 ${est(tp.shortY,tp.shortM)}/年）｜以你目前的年齡與成績，球團只願提供短約`,
+      f:()=>onPick(tp.shortY,tp.shortM)});
+  }
   if(onReject)opts.push({t:'拒絕，維持現狀',s:'不接受這份合約',f:onReject});
   choose(baseTitle,opts);
 }
@@ -1526,7 +1569,7 @@ function faMarket(o,d){
     return;
   }
   const est=of=>fmtMoney(Math.round(salaryFor(of.lv,d)*(of.mult||1)));
-  const estL=(of)=>{ const tp=termParams(d,of.lv); return `${tp.longY}年×${(tp.longM*(of.mult||1)).toFixed(2)} / ${tp.shortY}年×${(tp.shortM*(of.mult||1)).toFixed(2)}`; };
+  const estL=(of)=>{ const tp=termParams(d,of.lv); return tp.longEligible?`長 ${tp.longY}年×${(tp.longM*(of.mult||1)).toFixed(2)} / 短 ${tp.shortY}年×${(tp.shortM*(of.mult||1)).toFixed(2)}`:`僅短約 ${tp.shortY}年×${(tp.shortM*(of.mult||1)).toFixed(2)}`; };
   choose('自由市場報價一覽（每隊列出 長約 / 短約 方案）',[...offers.map(of=>({
     t:`${of.team}（${LV[of.lv].n}）`,
     s:`簽約金 ${fmtMoney(of.bonus)}｜奪冠率 ${teamChampRate(of.team)}%｜長/短：${estL(of)}`,
@@ -1833,7 +1876,15 @@ function endGame(reason){
     const rows=S.log.map(r=>`<tr><td style="white-space:nowrap">${r.y}</td><td style="white-space:nowrap">${r.age}</td><td style="white-space:nowrap">${r.tm}${r.p?"·"+r.p:""}</td><td style="text-align:left;font-size:11px">${r.line}</td></tr>`).join('');
     card('','生涯年表（逐年成績）',`<table class="fin"><tr><th>年度</th><th>齡</th><th>球隊</th><th style="text-align:left">成績</th></tr>${rows}</table>`);
   }
-  card('','生涯累積數據',tables||'<p>（無職業層級出賽紀錄）</p>');
+  let intlTable='';
+  if(S.intlCount>0){ const IS=S.intlStat;
+    if(S.pos==='P'){ const era=IS.IP>0?(IS.ER*9/IS.IP).toFixed(2):'-';
+      intlTable=`<h4 style="margin:12px 0 4px">🇹🇼 國際賽生涯（${S.intlCount} 屆）</h4><table class="st"><tr><th>出賽</th><th>局數</th><th>勝</th><th>救援</th><th>三振</th><th>ERA</th></tr><tr><td>${IS.G}</td><td>${fmtIP(IS.IP)}</td><td>${IS.W}</td><td>${IS.SV}</td><td>${IS.SO}</td><td>${era}</td></tr></table>`;
+    } else { const avg=IS.AB>0?(IS.H/IS.AB).toFixed(3).replace(/^0/,''):'-';
+      intlTable=`<h4 style="margin:12px 0 4px">🇹🇼 國際賽生涯（${S.intlCount} 屆）</h4><table class="st"><tr><th>出賽</th><th>打席</th><th>打擊率</th><th>安打</th><th>全壘打</th><th>打點</th></tr><tr><td>${IS.G}</td><td>${IS.PA}</td><td>${avg}</td><td>${IS.H}</td><td>${IS.HR}</td><td>${IS.RBI}</td></tr></table>`;
+    }
+  }
+  card('','生涯累積數據',(tables||'<p>（無職業層級出賽紀錄）</p>')+intlTable);
   if(evals.length)card('gold','生涯評價',evals.join('<br>'));
   /* 獎項與大賽成績 */
   card(S.honors.length?'gold':'','獎項與大賽成績',S.honors.length?S.honors.map(h=>'· '+h).join('<br>'):'（生涯未獲得任何獎項）');
@@ -1922,6 +1973,7 @@ function shareImage(evals,out){
   H+=30+tiers.length*24+14; // 評價
   if(keepTr.length||remTr.length)H+=54;
   H+=34+(leagues.length+1)*26+16; // 生涯數據表
+  if(S.intlCount>0)H+=30+24+28+12; // 國際賽區塊
   H+=30+Math.ceil(honors.length/2)*23+16; // 榮譽(雙欄)
   H+=30+(hist.length+1)*20+16; // 年表
   H+=70;
@@ -1982,6 +2034,23 @@ function shareImage(evals,out){
       const obp=st.PA>0?((st.H+st.BB)/st.PA).toFixed(3).replace(/^0/,''):'-';
       row([LG_N[b],st.yr,st.G,st.PA,avg,obp,st.H,st.HR,st.RBI,st.SB,(st.DEF>0?'+':'')+(st.DEF||0)]); } });
   y+=6;
+
+  // 國際賽生涯成績
+  if(S.intlCount>0){ const IS=S.intlStat;
+    hr(); sectionTitle('🇹🇼 國際賽生涯（'+S.intlCount+' 屆）');
+    if(isP){ const era=IS.IP>0?(IS.ER*9/IS.IP).toFixed(2):'-';
+      const ic=[['出賽',80],['局數',90],['勝',70],['救援',80],['三振',90],['ERA',90]];
+      let x=PAD; c.font='bold 13px monospace'; c.fillStyle='#8fae9c'; ic.forEach(function(h){c.fillText(h[0],x,y);x+=h[1];}); y+=24;
+      x=PAD; c.font='13px monospace'; c.fillStyle='#e8efe9';
+      [IS.G,fmtIP(IS.IP),IS.W,IS.SV,IS.SO,era].forEach(function(v,i){c.fillText(String(v),x,y);x+=ic[i][1];}); y+=28;
+    } else { const avg=IS.AB>0?(IS.H/IS.AB).toFixed(3).replace(/^0/,''):'-';
+      const ic=[['出賽',80],['打席',80],['打率',80],['安打',80],['HR',70],['打點',80]];
+      let x=PAD; c.font='bold 13px monospace'; c.fillStyle='#8fae9c'; ic.forEach(function(h){c.fillText(h[0],x,y);x+=h[1];}); y+=24;
+      x=PAD; c.font='13px monospace'; c.fillStyle='#e8efe9';
+      [IS.G,IS.PA,avg,IS.H,IS.HR,IS.RBI].forEach(function(v,i){c.fillText(String(v),x,y);x+=ic[i][1];}); y+=28;
+    }
+    y+=6;
+  }
 
   // 榮譽(雙欄橫式,不截斷)
   hr(); sectionTitle('生涯榮譽（'+honors.length+' 項）');
