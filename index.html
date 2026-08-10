@@ -144,25 +144,7 @@ table.fin td:first-child,table.fin th:first-child{text-align:left}
     <div class="stitch"></div>
     <h1 id="logo-tap">YaKyoLife<br><em>棒球人生模擬器</em></h1>
     <div id="ver-badge" style="position:fixed;top:6px;right:8px;font-size:10px;letter-spacing:1px;color:var(--dim);opacity:.55;font-family:monospace;z-index:50;pointer-events:none">v1.3.3</div>
-    <div id="cheer-editor" style="display:none">
-      <div class="field"><label>啦啦隊名單（每行一個名字，僅存在你的裝置上）</label>
-        <textarea id="cheer-ta" rows="8" style="width:100%;background:#0e2015;color:#e8efe9;border:1px solid #2b4a38;border-radius:10px;padding:10px;font-size:14px;line-height:1.6"></textarea></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn main" id="cheer-save" style="flex:1">儲存名單</button>
-        <button class="btn" id="cheer-reset" style="flex:1">還原預設</button>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn" id="cheer-export" style="flex:1">📤 匯出代碼</button>
-        <button class="btn" id="cheer-import" style="flex:1">📥 匯入代碼</button>
-      </div>
-      <div class="field" id="cheer-code-box" style="display:none;margin-top:8px">
-        <label id="cheer-code-label">名單代碼</label>
-        <textarea id="cheer-code" rows="3" style="width:100%;background:#0e2015;color:#ffc95c;border:1px solid #2b4a38;border-radius:10px;padding:10px;font-size:12px;word-break:break-all"></textarea>
-        <button class="btn main" id="cheer-code-go" style="width:100%;margin-top:6px">確認</button>
-      </div>
-      <p class="sub" style="margin-top:6px">名單只儲存在本機瀏覽器，不會隨遊戲檔散布。請自行承擔使用真實人名的法律風險。</p>
-    </div>
-    <p class="sub">高中三年養成 → 選秀・旅日・旅美 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
+        <p class="sub">高中三年養成 → 選秀・旅日・旅美 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
     <div class="field"><label>球員姓名</label><input id="in-name" maxlength="10" placeholder="例如：林家正" value=""></div>
     <div class="field"><label>守位</label>
       <div class="seg" id="seg-pos">
@@ -857,9 +839,8 @@ function drawEvents(n,done){
       {t:'保守應對',s:`成功率 ${Math.min(95,base+20)}%｜加成／減益幅度最小（±1）`,f:()=>{resolveEvent(ev,'safe',after);}}]);
   }}]);
 }
-/* 出廠預設為全虛構人名;玩家可透過隱藏編輯器自訂名單(僅存於玩家本機) */
-let CHEER=['林曉晴','陳若彤','張沛慈','王詠恩','許昀熙','蘇采蓁','周依潔','郭芷萱'];
-const CHEER_DEFAULT=CHEER.slice();
+/* 預設啦啦隊名單 */
+const CHEER=['林曉晴','陳若彤','張沛慈','王詠恩','許昀熙','蘇采蓁','周依潔','郭芷萱'];
 function loveEvent(next){
   const L=S.love;
   if(S.stage!=='PRO'||S.age<20){ next(); return; }
@@ -2394,66 +2375,6 @@ function shareImage(evals,out){
 (function(){ const t=document.getElementById('act-toggle');
   if(t)t.onclick=()=>{ document.getElementById('act').classList.toggle('collapsed');
     t.textContent=document.getElementById('act').classList.contains('collapsed')?'⌃ 展開選項':'⌄ 收合選項'; };
-})();
-/* ---- 隱藏啦啦隊名單編輯器:點標題 7 下 ---- */
-(function(){
-  try{ const saved=localStorage.getItem('bl_cheer');
-    if(saved){ const arr=JSON.parse(saved).filter(x=>typeof x==='string'&&x.trim()).slice(0,20);
-      if(arr.length)CHEER=arr; } }catch(e){}
-  const logo=document.getElementById('logo-tap'), ed=document.getElementById('cheer-editor');
-  if(!logo||!ed)return;
-  let taps=0,timer=null;
-  logo.addEventListener('click',()=>{
-    taps++; clearTimeout(timer); timer=setTimeout(()=>taps=0,1600);
-    if(taps>=7){ taps=0;
-      document.getElementById('cheer-ta').value=CHEER.join('\n');
-      ed.style.display=ed.style.display==='none'?'block':'none'; } });
-  document.getElementById('cheer-save').onclick=()=>{
-    const arr=document.getElementById('cheer-ta').value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,20);
-    if(!arr.length){ alert('名單不能是空的'); return; }
-    CHEER=arr;
-    try{ localStorage.setItem('bl_cheer',JSON.stringify(arr)); }catch(e){}
-    alert('已儲存！本名單只存在這台裝置的瀏覽器。'); ed.style.display='none'; };
-  document.getElementById('cheer-reset').onclick=()=>{
-    CHEER=CHEER_DEFAULT.slice();
-    try{ localStorage.removeItem('bl_cheer'); }catch(e){}
-    document.getElementById('cheer-ta').value=CHEER.join('\n'); alert('已還原為預設虛構名單。'); };
-  /* ---- 匯出/匯入:名單轉成一串代碼,由玩家之間自行流通 ---- */
-  const enc=arr=>'CHR1.'+btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(arr))));
-  const dec=code=>{
-    code=code.trim(); if(!code.startsWith('CHR1.'))throw 0;
-    const bin=atob(code.slice(5)), bytes=new Uint8Array([...bin].map(c=>c.charCodeAt(0)));
-    const arr=JSON.parse(new TextDecoder().decode(bytes));
-    if(!Array.isArray(arr))throw 0;
-    return arr.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim().slice(0,12)).slice(0,20); };
-  const codeBox=document.getElementById('cheer-code-box'),
-        codeTa=document.getElementById('cheer-code'),
-        codeLbl=document.getElementById('cheer-code-label'),
-        codeGo=document.getElementById('cheer-code-go');
-  let codeMode='export';
-  document.getElementById('cheer-export').onclick=()=>{
-    const arr=document.getElementById('cheer-ta').value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,20);
-    if(!arr.length){ alert('名單是空的，沒東西可匯出'); return; }
-    codeMode='export'; codeBox.style.display='block';
-    codeLbl.textContent='名單代碼（複製給朋友）'; codeGo.textContent='📋 複製代碼';
-    codeTa.value=enc(arr); codeTa.readOnly=true; };
-  document.getElementById('cheer-import').onclick=()=>{
-    codeMode='import'; codeBox.style.display='block';
-    codeLbl.textContent='貼上朋友給你的名單代碼'; codeGo.textContent='匯入這份名單';
-    codeTa.value=''; codeTa.readOnly=false; codeTa.focus(); };
-  codeGo.onclick=()=>{
-    if(codeMode==='export'){
-      codeTa.select(); codeTa.setSelectionRange(0,99999);
-      const done=()=>{ codeGo.textContent='✅ 已複製'; setTimeout(()=>codeGo.textContent='📋 複製代碼',1500); };
-      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(codeTa.value).then(done,done);
-      else{ try{document.execCommand('copy');}catch(e){} done(); }
-      return; }
-    try{ const arr=dec(codeTa.value);
-      if(!arr.length)throw 0;
-      document.getElementById('cheer-ta').value=arr.join('\n');
-      codeBox.style.display='none';
-      alert('已匯入 '+arr.length+' 個名字，記得按「儲存名單」才會生效。'); }
-    catch(e){ alert('代碼格式不對，請確認是完整複製的 CHR1. 開頭代碼。'); } };
 })();
 let selPos='P';
 $('seed-show').value=SEED;
