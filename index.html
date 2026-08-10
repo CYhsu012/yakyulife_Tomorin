@@ -407,17 +407,24 @@ function tjGamble(cont){ /* 量表達上限:先扣 -5,再對賭 */
   const succP=S.traits.rubber?85:55;
   choose('TJ 抉擇：你的手肘撐到極限了',[
     {t:'動 Tommy John 手術',main:true,s:'報銷一整年，回來球速/變化球回春（各 +3~+10）',f:()=>{
-      S.tj=0; S.tjCount++; S.rehab=1;
-      const gv=ri(3,10),gb=ri(3,10); addAb('vel',gv); addAb('brk',gb);
-      if(S.tjCount>=2){ tjTwoStrike(); }
-      board(1);
-      card('gold','手術成功',`手術很順利。漫長復健後，你的球威煥然一新——球速 <b class="up">+${gv}</b>、變化球 <b class="up">+${gb}</b>。（本季報銷）`);
-      afterGamble('surgery',cont); }},
-    {t:'打針硬撐這一季',warn:true,s:`成功率 ${succP}%｜失敗＝TJ 大傷（隔年報銷、能力再崩）`,f:()=>{
-      if(chance(succP)){ S.tj=Math.max(0,S.tj-20); addAb('vel',5); addAb('brk',5); board(1);
-        card('good','險過一關',`封閉針撐住了，你咬牙投完球季——量表 <b class="hl">−20</b>，球速、變化球各 <b class="up">+5</b>。但這是在跟時間借命。`);
-        afterGamble('inject',cont); }
-      else { tjBigInjury(cont); } }}]);
+              S.tj=0; S.tjCount++; S.rehab=1;
+              const gv=ri(3,10),gb=ri(3,10); 
+              /* 【修正】不經過訓練進度條，直接強制提升絕對能力值，並鎖定最高 80 */
+              S.ab.vel = clamp(S.ab.vel + gv, 1, 80);
+              S.ab.brk = clamp(S.ab.brk + gb, 1, 80);
+              if(S.tjCount>=2){ tjTwoStrike(); }
+              board(1);
+              card('gold','手術成功',`手術很順利。漫長復健後，你的球威煥然一新——球速 <b class="up">+${gv}</b>、變化球 <b class="up">+${gb}</b>。（本季報銷）`);
+              afterGamble('surgery',cont); }},
+            {t:'打針硬撐這一季',warn:true,s:`成功率 ${succP}%｜失敗＝TJ 大傷（隔年報銷、能力再崩）`,f:()=>{
+              if(chance(succP)){ S.tj=Math.max(0,S.tj-20); 
+                /* 【修正】打針成功也是直接給予絕對能力值 */
+                S.ab.vel = clamp(S.ab.vel + 5, 1, 80);
+                S.ab.brk = clamp(S.ab.brk + 5, 1, 80);
+                board(1);
+                card('good','險過一關',`封閉針撐住了，你咬牙投完球季——量表 <b class="hl">−20</b>，球速、變化球各 <b class="up">+5</b>。但這是在跟時間借命。`);
+                afterGamble('inject',cont); }
+              else { tjBigInjury(cont); } }}]);
 }
 function tjTwoStrike(){ /* 累計 2 次 TJ:球速與變化球砍半 */
   S.ab.vel=clamp(Math.round(S.ab.vel/2),1,80);
@@ -430,10 +437,25 @@ function tjBigInjury(cont){
   if(chance(5)){ S.ab.vel=10; S.ab.brk=10; S.pot.vel=20; S.pot.brk=20;
     card('bad','最壞的結果',`針扎下去的瞬間，肩膀傳來從未有過的撕裂感。醫生的臉色說明了一切——<b class="dn">肩膀報廢，球速與變化球歸零剩 10，潛力上限砍到 20</b>。你的投手生涯，大概到這裡了。`);
     board(1); afterGamble('fail',cont); return; }
-  addAb('vel',-5); addAb('brk',-5);
+  
+  /* 韌帶斷裂的懲罰 (-5) 以及手術後的回春 (+3~+10) */
+  const gv=ri(3,10), gb=ri(3,10);
+  /* 合併計算淨變動：(回春 - 斷裂懲罰) */
+  const netV = gv - 5;
+  const netB = gb - 5;
+  
+  /* 鎖定最高 80，直接修改絕對值避免蓄力 Bug */
+  S.ab.vel = clamp(S.ab.vel + netV, 1, 80);
+  S.ab.brk = clamp(S.ab.brk + netB, 1, 80);
+  
   if(S.tjCount>=2)tjTwoStrike();
   board(1);
-  card('bad','TJ 大傷',`硬撐的代價來了——韌帶當場斷裂。隔年<b class="dn">全年報銷</b>，球速、變化球再各 <b class="dn">−5</b>。就算開完刀回來，也只能勉強打平。`);
+  
+  /* 處理字卡顯示的顏色與符號 */
+  const vStr = netV > 0 ? `<b class="up">+${netV}</b>` : netV < 0 ? `<b class="dn">${netV}</b>` : `<b>0</b>`;
+  const bStr = netB > 0 ? `<b class="up">+${netB}</b>` : netB < 0 ? `<b class="dn">${netB}</b>` : `<b>0</b>`;
+  
+  card('bad','TJ 大傷',`硬撐的代價來了——韌帶當場斷裂。隔年<b class="dn">全年報銷</b>。經歷了漫長的手術與復健（斷裂 −5 加上手術回春），最終你的球速 ${vStr}、變化球 ${bStr}。就算滿血回歸，也真的只是勉強打平。`);
   afterGamble('fail',cont);
 }
 function afterGamble(kind,cont){
