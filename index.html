@@ -143,6 +143,7 @@ table.fin td:first-child,table.fin th:first-child{text-align:left}
   <div class="wrap">
     <div class="stitch"></div>
     <h1 id="logo-tap">YaKyoLife<br><em>棒球人生模擬器</em></h1>
+    <div id="ver-badge" style="position:fixed;top:6px;right:8px;font-size:10px;letter-spacing:1px;color:var(--dim);opacity:.55;font-family:monospace;z-index:50;pointer-events:none">v1.3.2</div>
     <div id="cheer-editor" style="display:none">
       <div class="field"><label>啦啦隊名單（每行一個名字，僅存在你的裝置上）</label>
         <textarea id="cheer-ta" rows="8" style="width:100%;background:#0e2015;color:#e8efe9;border:1px solid #2b4a38;border-radius:10px;padding:10px;font-size:14px;line-height:1.6"></textarea></div>
@@ -313,6 +314,7 @@ function dposReview(cont){
     f:()=>{ S.dpos=p; card('info','守位調整',`球團季末評估後，新球季改守 <b class="hl">${DPN[p]}</b>。`); cont(); }}));
   choose(`守位會議：教練團認為你的守備已撐不住 ${DPN[S.dpos]}（${LV[S.lv].n}標準）`,opts);
 }
+const APP_VER='v1.3.2';
 const TEAM_COLOR={
   '台中猛瑪':'#ffd800','府城雄獅':'#ff7f00','桃園金剛':'#8b1a1a','新北騎士':'#003f87','台北恐龍':'#c8102e','高雄神鵰':'#1a7a3a',
   '東京大人':'#f97709','阪神猛虎':'#ffe201','橫濱海星':'#0a3ce0','廣島紅鯉':'#e60012','神宮飛燕':'#0a7bc2','名古屋神龍':'#003a70','福岡猛禽':'#f5c400','北海道培根':'#0a2d5c','千葉海潮':'#111111','仙台金翼':'#8b0000','大阪蠻牛':'#0033a0','埼玉雄獅':'#1268b3'};
@@ -2190,6 +2192,7 @@ function shareImage(evals,out){
   c.fillStyle='#ffc95c'; c.font='bold 16px sans-serif';
   c.fillText('生涯總薪資 '+fmtMoney(Math.round(S.salary))+' 台幣',PAD,y); y+=26;
   c.fillStyle='#8fae9c'; c.font='11px monospace'; c.fillText('seed: '+SEED,PAD,H-40);
+  c.textAlign='right'; c.fillText(APP_VER,W-PAD,H-40); c.textAlign='left';
 
   const url=cv.toDataURL('image/png');
   out.innerHTML=`<img src="${url}" style="width:100%;border-radius:8px" alt="結算圖"><div class="statline">長按（或右鍵）圖片即可儲存分享</div>`;
@@ -2286,6 +2289,7 @@ $('btn-start').onclick=()=>{
   card('info','球員誕生',`${S.year} 年春天，${POSN[S.pos]} <b class="hl">${S.name}</b> 加入 <b class="hl">${S.team}</b> 棒球隊。三年後的路，要自己選。<br><span style="color:var(--dim);font-size:12px">提示：22 歲前累積擲出 5 次「6」可覺醒隱藏素質。</span>`);
   startYear();
 };
+(function(){ const vb=document.getElementById('ver-badge'); if(vb)vb.textContent=APP_VER; })();
 </script>
 </body>
 </html>
